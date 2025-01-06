@@ -115,7 +115,7 @@ DROPOUT = 0.5
 
 LR = 0.005
 BATCH_SIZE = 128
-EPOCHS = 20
+EPOCHS = 50
 
 dataset = SequenceDataset("data/compliments.txt", seq_length=SEQ_LENGTH)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)

@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 import torch
 from model.utils import one_hot, sample
 from torch.utils.data import DataLoader
-
+import time
 from torch import nn, optim
 from tqdm import tqdm
 
@@ -12,10 +12,7 @@ class RNNPytorch(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(RNNPytorch, self).__init__()
         self.input_dim, self.hidden_dim,self.output_dim = input_dim, hidden_dim,output_dim
-        # # self.forget_input, self.forget_hidden, self.forget_bias = self.create_gate_parameters()
         self.input_input, self.input_hidden, self.input_bias = self.create_gate_parameters()
-        # self.output_input, self.output_hidden, self.output_bias = self.create_gate_parameters()
-        # self.cell_input, self.cell_hidden, self.cell_bias = self.create_gate_parameters()
         self.hidden_output = nn.Parameter(torch.zeros(self.hidden_dim, self.output_dim))
         self.bias_output = nn.Parameter(torch.zeros(self.output_dim))
         nn.init.xavier_uniform_(self.hidden_output)
@@ -29,28 +26,18 @@ class RNNPytorch(nn.Module):
         bias = nn.Parameter(torch.zeros(self.hidden_dim))
         return input_weights, hidden_weights, bias
 
-    def forward(self, x, h, c):
-        # x has shape [batch_size, seq_len, input_size]
-        output_hiddens, output_cells = [], []
-        for i in range(x.shape[1]):
-            # forget_gate = F.sigmoid((x[:, i] @ self.forget_input) + (h @ self.forget_hidden) + self.forget_bias)
-            h = F.tanh((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
-            # output_gate = F.sigmoid((x[:, i] @ self.output_input) + (h @ self.output_hidden) + self.output_bias)
-            # input_activations = F.tanh((x[:, i] @ self.cell_input) + (h @ self.cell_hidden) + self.cell_bias)
-            # # c = (forget_gate * c) + (input_gate * input_activations)
-            # # h = F.tanh(c) * output_gate
-            #
-            # output_hiddens.append(h.unsqueeze(1))
-            # output_cells.append(c.unsqueeze(1))
-            m = nn.Softmax(dim=1)
-            output_hidden =  h@self.hidden_output  + self.bias_output
-            # print(output_hidden.shape)
-            # print("Output hidden", self.hidden_output.shape)
-            output_hiddens.append(h.unsqueeze(1))
-            abc = output_hidden.unsqueeze(1)
-            output_cells.append(abc)
 
-        # print(torch.cat(output_cells, dim=1).shape)
+    def forward(self, x, h, c):
+        output_hiddens, output_cells = [], [] #Return the hidden state and the output
+
+        for i in range(x.shape[1]):
+            m = nn.LeakyReLU(0.1)
+            # h = F.tanh((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
+            h = m((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
+            output_hidden =  h@self.hidden_output  + self.bias_output
+            output_hiddens.append(h.unsqueeze(1)) #We need a 3 dimensional result
+            output_val = output_hidden.unsqueeze(1)
+            output_cells.append(output_val)
         return torch.cat(output_hiddens, dim=1), torch.cat(output_cells, dim=1)
 
 
@@ -120,11 +107,11 @@ class SequenceDataset(Dataset):
 
 SEQ_LENGTH = 100
 HIDDEN_SIZE = 512
-NUM_LAYERS = 2
+NUM_LAYERS = 3
 
 DROPOUT = 0.5
 
-LR = 0.005
+LR = 0.00005
 BATCH_SIZE = 128
 EPOCHS = 100
 
@@ -137,6 +124,7 @@ crit = nn.CrossEntropyLoss()
 
 
 for e in range(1, EPOCHS + 1):
+    epoch_start = time.time()
     loop = tqdm(loader, total=len(loader), leave=True, position=0)
     loop.set_description(f"Epoch : [{e}/{EPOCHS}] | ")
     total_loss = 0
@@ -146,16 +134,16 @@ for e in range(1, EPOCHS + 1):
         opt.zero_grad()
         h = (torch.zeros((NUM_LAYERS, x.shape[0], HIDDEN_SIZE)), torch.zeros((NUM_LAYERS, x.shape[0], HIDDEN_SIZE)))
         yhat, h = model.forward(x, h)
-        print(yhat.view(-1, yhat.shape[-1]).shape)
+        # print(yhat.view(-1, yhat.shape[-1]).shape)
         loss = crit(yhat.view(-1, yhat.shape[-1]), y.view(-1, y.shape[-1]))
         loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), 5)
+        nn.utils.clip_grad_norm_(model.parameters(), 1)
         opt.step()
 
         total_loss += loss.item()
         total_len += 1
         loop.set_postfix(average_loss = total_loss / total_len)
-
+    epoch_end = time.time() - epoch_start
     if e % 2 == 0:
-        print(f"\n{'=' * 50}\nSample output: \n{sample(model, dataset, 'thou', HIDDEN_SIZE, 400, NUM_LAYERS, )}\n{'=' * 50}\n")
+        print(f"\n{'=' * 50}\nSample output: \n{sample(model, dataset, ' ', HIDDEN_SIZE, 400, NUM_LAYERS, )}\n{'=' * 50}\nEpoch Time: {epoch_end}")
         torch.save(model.state_dict(), "lstm-weights.pth")

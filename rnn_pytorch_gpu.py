@@ -131,6 +131,7 @@ use_cuda = torch.cuda.is_available()
 device = torch.device("cpu")
 if use_cuda:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("device Used", device)
 
 dataset = SequenceDataset("data/compliments.txt", seq_length=SEQ_LENGTH).to(device)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)

@@ -47,7 +47,7 @@ class VanillaRNN:
         self.grads = {}
         self.m_params = {}
         self.beta1 = 0.9  # 1st momentum parameter
-        self.beta2 = 0.999  # 2nd momentum parameter
+        self.beta2 = 0.9999  # 2nd momentum parameter
 
         for key in self.params:
             self.grads["d" + key] = np.zeros_like(self.params[key])
@@ -152,7 +152,7 @@ class VanillaRNN:
             grads - derivatives of every learnable parameter in the RNN
         """
         dh_next = np.zeros_like(h[0])
-        self.reset_grad()
+        # self.reset_grad()
 
         for t in reversed(range(self.seq_len)):
             dy = np.copy(y_pred[t])

@@ -84,7 +84,7 @@ with open('data/compliments.txt', 'r') as file:
 embed_size = 128    # Embedding layer size , input to the LSTM
 hidden_size = 75  # Hidden size of LSTM units
 num_layers = 1      # no LSTMs stacked
-num_epochs = 10     # total no of epochs
+num_epochs = 50    # total no of epochs
 batch_size = 128     # batch size
 seq_length = 100     # sequence length
 learning_rate = 0.005 # learning rate
@@ -109,11 +109,11 @@ idx_to_char = {i: w for i,w in enumerate(chars)}
 
 char_to_idx = tokenize.wordToId
 idx_to_char = tokenize.IdToWord
-model = LSTM(char_to_idx, idx_to_char, vocab_size, epochs = 10)
+model = LSTM(char_to_idx, idx_to_char, vocab_size, epochs = 50)
 
 # J, params = model.train(train_text, ids)
 
-epochs = 10
+epochs = 50
 n_h = 100
 def train1( X, verbose=True):
     """
@@ -163,7 +163,7 @@ def train1( X, verbose=True):
         strp = " "
         for ind in s:
             word = corpus.get_word(ind)
-            strp = strp + word
+            strp = strp+  " "+ word
         print(strp, "\n")
         logVal = -1 / length_s * (logVal)
         perplexity = np.power(2, logVal)
