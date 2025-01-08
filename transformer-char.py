@@ -1,5 +1,7 @@
 import torch
-from model.LanguageModel import LanguageModel
+
+# from model.transformer.train import model
+from model.transformer.LanguageModel import LanguageModel
 import matplotlib.pyplot as plt
 
 # hyperparameters

@@ -2,8 +2,8 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from model.AttentionBlock import Block
-from model.PositionalEncoding import PositionalEncoding
+from model.transformer.AttentionBlock import Block
+from model.transformer.PositionalEncoding import PositionalEncoding
 
 
 class LanguageModel(nn.Module):

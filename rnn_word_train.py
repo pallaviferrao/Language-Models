@@ -1,7 +1,7 @@
 from Tokenize.tokenize import Corpus
 import torch
 import numpy as np
-from model.rnn import  VanillaRNN
+from model.RNN.rnn import  VanillaRNN
 from Tokenize.tokenizer import Tokenize
 import time
 

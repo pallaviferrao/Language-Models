@@ -1,5 +1,5 @@
 import random
-from rnn_simple import VanillaRNN
+from model.RNN.rnn_simple import VanillaRNN
 from Tokenize.tokenizer import Tokenize
 import torch
 

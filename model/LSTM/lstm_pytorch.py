@@ -117,7 +117,7 @@ LR = 0.005
 BATCH_SIZE = 128
 EPOCHS = 2
 
-dataset = SequenceDataset("../data/compliments.txt", seq_length=SEQ_LENGTH)
+dataset = SequenceDataset("../../data/compliments.txt", seq_length=SEQ_LENGTH)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 print(len(dataset.vocab))
 model = MultiLayerLSTM(len(dataset.vocab), HIDDEN_SIZE, NUM_LAYERS, DROPOUT)

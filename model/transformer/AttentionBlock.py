@@ -1,6 +1,6 @@
 import torch.nn as nn
-from model.MultiheadAttention import MultiHeadAttention
-from model.FeedForward import FeedFoward
+from model.transformer.MultiheadAttention import MultiHeadAttention
+from model.transformer.FeedForward import FeedFoward
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 

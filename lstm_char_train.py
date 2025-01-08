@@ -1,8 +1,7 @@
 import random
 
-from model.lstm_from_scratch import LSTM
+from model.LSTM.lstm_from_scratch import LSTM
 import torch
-import numpy as np
 
 
 #Word LSTM from scratch
@@ -100,5 +99,6 @@ char_to_idx = {w: i for i,w in enumerate(chars)}
 idx_to_char = {i: w for i,w in enumerate(chars)}
 
 model = LSTM(char_to_idx, idx_to_char, vocab_size, epochs = num_epochs)
+print(f'Number of parameters {model.get_param_count()}')
 
 J, params = model.train(train_text, ids)

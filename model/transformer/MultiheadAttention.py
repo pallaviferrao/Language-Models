@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from model.AttentionHead import AttentionHead
+from model.transformer.AttentionHead import AttentionHead
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 

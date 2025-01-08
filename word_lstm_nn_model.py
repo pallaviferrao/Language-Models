@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_
-from model.lstm_model_nn import LSTM
+from model.LSTM.lstm_model_nn import LSTM
 from Tokenize.tokenize import Corpus
 
 

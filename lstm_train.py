@@ -1,6 +1,6 @@
 import random
 
-from model.lstm_from_scratch import LSTM
+from model.LSTM.lstm_from_scratch import LSTM
 from Tokenize.tokenizer import Tokenize
 import torch
 import numpy as np
