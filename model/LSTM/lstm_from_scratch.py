@@ -17,31 +17,39 @@ class LSTM:
         self.lr = lr  # learning rate
         self.beta1 = beta1  # 1st momentum parameter
         self.beta2 = beta2  # 2nd momentum parameter
-
+        self.params_count = 0
         # -----initialise weights and biases-----#
         self.params = {}
         std = (1.0 / np.sqrt(self.vocab_size + self.n_h))  # Xavier initialisation
 
         # forget gate
         self.params["Wf"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bf"] = np.ones((self.n_h, 1))
-
+        self.params_count += self.n_h
         # input gate
         self.params["Wi"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bi"] = np.zeros((self.n_h, 1))
 
         # cell gate
         self.params["Wc"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bc"] = np.zeros((self.n_h, 1))
+        self.params_count += self.n_h
 
         # output gate
         self.params["Wo"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bo"] = np.zeros((self.n_h, 1))
+        self.params_count += self.n_h
 
         # output
         self.params["Wv"] = np.random.randn(self.vocab_size, self.n_h) * \
                             (1.0 / np.sqrt(self.vocab_size))
+        self.params_count += self.n_h * self.vocab_size
         self.params["bv"] = np.zeros((self.vocab_size, 1))
+        self.params_count += self.vocab_size
 
         # -----initialise gradients and Adam parameters-----#
         self.grads = {}
@@ -55,6 +63,8 @@ class LSTM:
         self.smooth_loss = -np.log(1.0 / self.vocab_size) * self.seq_len
         return
 
+    def get_param_count(self):
+        return self.params_count
 
     def sigmoid(self, x):
         """

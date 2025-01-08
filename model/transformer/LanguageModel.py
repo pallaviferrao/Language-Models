@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from model.AttentionBlock import Block
+from model.PositionalEncoding import PositionalEncoding
+
 
 class LanguageModel(nn.Module):
     '''
@@ -22,8 +24,11 @@ class LanguageModel(nn.Module):
         self.n_layer = n_layer
         self.token_embeddings = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.position_embedding_table = PositionalEncoding(n_embd)
         self.ln_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size)
+        self.attention_blocks = nn.Sequential(*[Block(self.n_embd, self.block_size, n_head=self.n_head) for _ in range(self.n_layer)])
+
 
 
     def forward(self, x_seq, y=None):
@@ -34,11 +39,18 @@ class LanguageModel(nn.Module):
         #after this we need to get the position of each value
         #TODO: This should be the sin and cos formula which we will add tomorrow
         #For now each element in the batch needs a position embedding
-        pos_emb = self.position_embedding_table(torch.arange(batch_size, device= self.device)) # (T,C)
+
+        #pos_emb = self.position_embedding_table(torch.arange(batch_size, device= self.device)) # (T,C)
+        pos_emb = PositionalEncoding(self.n_embd, batch_size)(torch.arange(batch_size, device= self.device))
         #Create sequence for Blocks for given number of layers
-        attention_blocks = nn.Sequential(*[Block(self.n_embd, n_head=self.n_head) for _ in range(self.n_layer)])
+        # print(token_embedding.shape)
+        # print(pos_emb.shape)
+        # pos_emb = pos_emb.expand(block_size, -1, -1)
+        # print(token_embedding.shape)
+        # print(pos_emb.shape)
+
         x = token_embedding + pos_emb
-        x = attention_blocks(x)
+        x = self.attention_blocks(x)
         x = self.ln_f(x)
         logits = self.lm_head(x)
         if y is None:

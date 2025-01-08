@@ -7,15 +7,17 @@ import torch.nn.functional as F
 import numpy as np
 
 
+
+
 class VanillaRNN:
 
-    def __init__(self, char_to_idx, idx_to_char, vocab_size, hidden_layer_size=1024,
+    def __init__(self, char_to_idx, idx_to_char, vocab_size, hidden_layer_size=100,
                  seq_len=100, clip_rate=5, epochs=50, learning_rate=1e-2):
         """
         Implementation of simple character-level RNN using Numpy
         Major inspiration from karpathy/min-char-rnn.py
         """
-
+        self.param_count = 0
         # assign instance variables
         self.char_to_idx = char_to_idx  # dictionary that maps characters in the vocabulary to an index
         self.idx_to_char = idx_to_char  # dictionary that maps indices to unique characters in the vocabulary
@@ -34,13 +36,16 @@ class VanillaRNN:
         self.params = {}
 
         self.params["W_xh"] = np.random.randn(self.vocab_size, self.n_h) * 0.01
+        self.param_count += self.vocab_size * self.n_h
 
         self.params["W_hh"] = np.random.randn(self.n_h, self.n_h) * 0.01
+        self.param_count += self.n_h * self.n_h
         self.params["b_h"] = np.zeros((1, self.n_h))
-
+        self.param_count += 1 * self.n_h
         self.params["W_hy"] = np.random.randn(self.n_h, self.vocab_size) * 0.01
+        self.param_count += self.n_h * self.vocab_size
         self.params["b_y"] = np.zeros((1, self.vocab_size))
-
+        self.param_count += self.vocab_size
         self.h0 = np.zeros((1, self.n_h))  # value of hidden state at time step t = -1. This is updated over time
 
         # initialize gradients and memory parameters for Adagrad
@@ -53,12 +58,12 @@ class VanillaRNN:
             self.grads["d" + key] = np.zeros_like(self.params[key])
             self.m_params["m" + key] = np.zeros_like(self.params[key])
             self.m_params["v" + key] = np.zeros_like(self.params[key])
+    def get_parameter_count(self):
+        return self.param_count/1e6
 
     def reset_grad(self):
         for key in self.params:
             self.grads["d" + key] = np.zeros_like(self.params[key])
-            self.m_params["m" + key] = np.zeros_like(self.params[key])
-            self.m_params["v" + key] = np.zeros_like(self.params[key])
 
     def encode_data(self, X):
         """
@@ -152,7 +157,7 @@ class VanillaRNN:
             grads - derivatives of every learnable parameter in the RNN
         """
         dh_next = np.zeros_like(h[0])
-        # self.reset_grad()
+        self.reset_grad()
 
         for t in reversed(range(self.seq_len)):
             dy = np.copy(y_pred[t])
