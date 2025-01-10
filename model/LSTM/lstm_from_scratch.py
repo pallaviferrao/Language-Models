@@ -2,6 +2,9 @@ import numpy as np
 from random import uniform
 import time
 
+
+
+
 class LSTM:
     def __init__(self, char_to_idx, idx_to_char, vocab_size, n_h=100, seq_len=25,
                  epochs=10, lr=0.001, beta1=0.9, beta2=0.999, batch_size=25):
@@ -23,23 +26,29 @@ class LSTM:
         std = (1.0 / np.sqrt(self.vocab_size + self.n_h))  # Xavier initialisation
 
         # forget gate
-        self.params["Wf"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params["Wfh"] = np.random.randn(self.vocab_size, self.n_h)
+        self.params["Wf"] = np.random.randn(self.n_h, self.n_h) * std
         self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bf"] = np.ones((self.n_h, 1))
         self.params_count += self.n_h
         # input gate
-        self.params["Wi"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params["Wxh"] = np.random.randn(self.vocab_size, self.n_h)
+        self.params["Wi"] = np.random.randn(self.n_h, self.n_h) * std
         self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bi"] = np.zeros((self.n_h, 1))
 
         # cell gate
-        self.params["Wc"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params["Wch"] = np.random.randn(self.vocab_size, self.n_h)
+
+        self.params["Wc"] = np.random.randn(self.n_h, self.n_h) * std
         self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bc"] = np.zeros((self.n_h, 1))
         self.params_count += self.n_h
 
         # output gate
-        self.params["Wo"] = np.random.randn(self.n_h, self.n_h + self.vocab_size) * std
+        self.params["Woh"] = np.random.randn(self.vocab_size, self.n_h)
+
+        self.params["Wo"] = np.random.randn(self.n_h, self.n_h) * std
         self.params_count += self.n_h * (self.n_h + self.vocab_size)
         self.params["bo"] = np.zeros((self.n_h, 1))
         self.params_count += self.n_h
@@ -158,7 +167,7 @@ class LSTM:
             # find the char with the sampled index and concat to the output string
             char = self.idx_to_char[idx]
             sample_string += char
-        logVal = -1 / 10 * (logVal)
+        logVal = -1 / sample_size * (logVal)
         perplexity = np.power(2, logVal)
         print("perplexity", perplexity)
         return sample_string
@@ -167,53 +176,57 @@ class LSTM:
         """
         Implements the forward propagation for one time step
         """
-        z = np.row_stack((h_prev, x))
+        # z = np.row_stack((h_prev))
+        z = h_prev
 
-        f = self.sigmoid(np.dot(self.params["Wf"], z) + self.params["bf"])
-        i = self.sigmoid(np.dot(self.params["Wi"], z) + self.params["bi"])
-        c_bar = np.tanh(np.dot(self.params["Wc"], z) + self.params["bc"])
+        f = self.sigmoid(np.dot(self.params["Wxh"].T,x) + np.dot(self.params["Wf"], z) + self.params["bf"])
+        i = self.sigmoid(np.dot( self.params["Wfh"].T,x) + np.dot(self.params["Wi"], z) + self.params["bi"])
+        o = self.sigmoid(np.dot( self.params["Woh"].T,x) + np.dot(self.params["Wo"], z) + self.params["bo"])
 
+        c_bar = np.tanh( np.dot(self.params["Wch"].T,x) + np.dot(self.params["Wc"], z) + self.params["bc"])
         c = f * c_prev + i * c_bar
-        o = self.sigmoid(np.dot(self.params["Wo"], z) + self.params["bo"])
         h = o * np.tanh(c)
 
         v = np.dot(self.params["Wv"], h) + self.params["bv"]
         y_hat = self.softmax(v)
         return y_hat, v, h, o, c, c_bar, i, f, z
 
-    def backward_step(self, y, y_hat, dh_next, dc_next, c_prev, z, f, i, c_bar, c, o, h):
+    def backward_step(self, y, y_hat, dh_next, dc_next, c_prev, z, x, f, i, c_bar, c, o, h):
         """
         Implements the backward propagation for one time step
         """
         dv = np.copy(y_hat)
         dv[y] -= 1  # yhat - y
-
+        # Update Output
         self.grads["dWv"] += np.dot(dv, h.T)
         self.grads["dbv"] += dv
-
+        # Store Hidden state for H(t)
         dh = np.dot(self.params["Wv"].T, dv)
         dh += dh_next
 
         do = dh * np.tanh(c)
         da_o = do * o * (1 - o)
+        self.grads["dWoh"] += np.dot(x,da_o.T)
         self.grads["dWo"] += np.dot(da_o, z.T)
         self.grads["dbo"] += da_o
 
         dc = dh * o * (1 - np.tanh(c) ** 2)
         dc += dc_next
-
         dc_bar = dc * i
         da_c = dc_bar * (1 - c_bar ** 2)
+        self.grads["dWch"] += np.dot(x, da_c.T)
         self.grads["dWc"] += np.dot(da_c, z.T)
         self.grads["dbc"] += da_c
 
         di = dc * c_bar
         da_i = di * i * (1 - i)
+        self.grads["dWxh"] += np.dot(x, da_i.T)
         self.grads["dWi"] += np.dot(da_i, z.T)
         self.grads["dbi"] += da_i
 
         df = dc * c_prev
         da_f = df * f * (1 - f)
+        self.grads["dWfh"] += np.dot(x, da_f.T)
         self.grads["dWf"] += np.dot(da_f, z.T)
         self.grads["dbf"] += da_f
 
@@ -255,7 +268,7 @@ class LSTM:
 
         for t in reversed(range(self.seq_len)):
             dh_next, dc_next = self.backward_step(y_batch[t], y_hat[t], dh_next,
-                                                  dc_next, c[t - 1], z[t], f[t], i[t],
+                                                  dc_next, c[t - 1], z[t], x[t], f[t], i[t],
                                                   c_bar[t], c[t], o[t], h[t])
         return loss, h[self.seq_len - 1], c[self.seq_len - 1]
 
@@ -346,8 +359,10 @@ class LSTM:
                     # self.update_params_ada(batch_num)
 
                     # print out loss and sample string
-                    if j % 40000 == 0:
-                        print("Batch time",time.time()- batch_time)
+                    if j % 80000 == 0:
+                        # print("Batch time",time.time()- batch_time)
+                        s = self.sample(h_prev, c_prev, sample_size=200)
+                        print(s, "\n")
                         batch_time = time.time()
             epoch_end = time.time()- epoch_start
             print('Epoch:', epoch, 'time', epoch_end, '\tBatch:', j, "-", j + self.seq_len,
