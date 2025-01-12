@@ -4,7 +4,7 @@ My goal was to understand the basics of Neural Networks and their development bo
 This also gave me the flexibility to play around with different aspects of optimization.
 
 
-Link To my Learnings: https://www.notion.so/Hi-I-m-Pallavi-Ferrao-170a3381eaa180daa33eec8852d80215?p=170a3381eaa1818abc01dddf053dae4e&pm=c
+Link To my Learnings: https://www.notion.so/Hi-I-m-Pallavi-Ferrao-170a3381eaa180daa33eec8852d80215?p=170a3381eaa1818abc01dddf053dae4e&pm=c](https://www.notion.so/Text-Generation-170a3381eaa1818abc01dddf053dae4e?pvs=4
 
 ## How to Run?
 1.  Choose the model of choice.
