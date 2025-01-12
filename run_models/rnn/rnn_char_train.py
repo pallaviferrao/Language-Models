@@ -119,10 +119,10 @@ for i in range(num_epochs):
             smooth_loss = smooth_loss * 0.999 + loss * 0.001
             J.append(smooth_loss)
             model.backward_pass(X_batch, y_batch, y_pred, h)
-            # model.update_params()
+            model.update_params()
 
-            batch_num = i * num_epochs + j / seq_length + 1
-            model.update_params_adam(seq_length)
+            # batch_num = i * num_epochs + j / seq_length + 1
+            # model.update_params_adam(seq_length)
 
             if(j%40000 ==0):
                 s_index = char_to_idx[' ']
@@ -154,9 +154,11 @@ for i in range(num_epochs):
     logVal = -1 / length_s * (logVal)
     perplexity = np.power(2, logVal)
     print("perplexity", perplexity)
-    plt.plot(J)
-    plt.xlabel('Iterations')
-    plt.ylabel('Loss')
-    plt.title('Training Loss Curve')
-    plt.show()
+    if(i%25 == 0):
+        plt.plot(J)
+        plt.xlabel('Iterations')
+        plt.ylabel('Loss')
+        plt.title('Training Loss Curve')
+        plt.savefig("traincurve.png")
+
 

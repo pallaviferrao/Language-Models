@@ -1,6 +1,7 @@
 import random
 
 from model.LSTM.lstm_from_scratch import LSTM
+# from model.LSTM.lstm_scratch import LSTM
 from Tokenize.tokenizer import Tokenize
 import torch
 import numpy as np
@@ -154,7 +155,7 @@ def train1( X, verbose=True):
                 model.update_params(batch_num)
 
                 # print out loss and sample string
-            print("Batch time", time.time() - batch_time)
+            # print("Batch time", time.time() - batch_time)
 
         print('Epoch:', epoch, 'epoch time', time.time()-epoch_start, '\tBatch:', j, "-", j + seq_length,
               '\tLoss:', round(smooth_loss, 2))
