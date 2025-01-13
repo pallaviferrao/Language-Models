@@ -1,26 +1,22 @@
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torch
-from utils import one_hot
-from utils import sample
+from model.utils import one_hot
+from model.utils import sample
 from torch.utils.data import DataLoader
 
 from torch import nn, optim
 from tqdm import tqdm
 
-class RNNPytorch(nn.Module):
+class LSTMCell(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(RNNPytorch, self).__init__()
-        self.input_dim, self.hidden_dim,self.output_dim = input_dim, hidden_dim,output_dim
-        # # self.forget_input, self.forget_hidden, self.forget_bias = self.create_gate_parameters()
+    def __init__(self, input_dim, hidden_dim):
+        super(LSTMCell, self).__init__()
+        self.input_dim, self.hidden_dim = input_dim, hidden_dim
+        self.forget_input, self.forget_hidden, self.forget_bias = self.create_gate_parameters()
         self.input_input, self.input_hidden, self.input_bias = self.create_gate_parameters()
-        # self.output_input, self.output_hidden, self.output_bias = self.create_gate_parameters()
-        # self.cell_input, self.cell_hidden, self.cell_bias = self.create_gate_parameters()
-        self.hidden_output = nn.Parameter(torch.zeros(self.hidden_dim, self.output_dim))
-        self.bias_output = nn.Parameter(torch.zeros(self.output_dim))
-        nn.init.xavier_uniform_(self.hidden_output)
-
+        self.output_input, self.output_hidden, self.output_bias = self.create_gate_parameters()
+        self.cell_input, self.cell_hidden, self.cell_bias = self.create_gate_parameters()
 
     def create_gate_parameters(self):
         input_weights = nn.Parameter(torch.zeros(self.input_dim, self.hidden_dim))
@@ -34,25 +30,24 @@ class RNNPytorch(nn.Module):
         # x has shape [batch_size, seq_len, input_size]
         output_hiddens, output_cells = [], []
         for i in range(x.shape[1]):
-            # forget_gate = F.sigmoid((x[:, i] @ self.forget_input) + (h @ self.forget_hidden) + self.forget_bias)
-            h = F.tanh((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
-            # output_gate = F.sigmoid((x[:, i] @ self.output_input) + (h @ self.output_hidden) + self.output_bias)
-            # input_activations = F.tanh((x[:, i] @ self.cell_input) + (h @ self.cell_hidden) + self.cell_bias)
-            # # c = (forget_gate * c) + (input_gate * input_activations)
-            # # h = F.tanh(c) * output_gate
-            #
-            # output_hiddens.append(h.unsqueeze(1))
-            # output_cells.append(c.unsqueeze(1))
-            m = nn.Softmax(dim=1)
-            output_hidden =  h@self.hidden_output  + self.bias_output
-            # print(output_hidden.shape)
-            # print("Output hidden", self.hidden_output.shape)
-            output_hiddens.append(h.unsqueeze(1))
-            abc = output_hidden.unsqueeze(1)
-            output_cells.append(abc)
+            # print("x", x[:, i].shape)
+            forget_gate = F.sigmoid((x[:, i] @ self.forget_input) + (h @ self.forget_hidden) + self.forget_bias)
+            input_gate = F.sigmoid((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
+            output_gate = F.sigmoid((x[:, i] @ self.output_input) + (h @ self.output_hidden) + self.output_bias)
+            input_activations = torch.tanh((x[:, i] @ self.cell_input) + (h @ self.cell_hidden) + self.cell_bias)
+            c = (forget_gate * c) + (input_gate * input_activations)
+            h = torch.tanh(c) * output_gate
 
-        # print(torch.concat(output_cells, dim=1).shape)
-        return torch.cat(output_hiddens, dim=1), torch.cat(output_cells, dim=1)
+            squeeze_h = h.unsqueeze(1)
+            output_hiddens.append(squeeze_h)
+
+
+            squeeze_c = c.unsqueeze(1)
+
+            output_cells.append(squeeze_c)
+            # print("output cells", len(output_cells))
+            # print("output cells", torch.concat(output_cells, dim=1).shape)
+        return  torch.cat(output_hiddens, dim=1), torch.cat(output_cells, dim=1)
 
 
 
@@ -62,36 +57,30 @@ class MultiLayerLSTM(nn.Module):
         super(MultiLayerLSTM, self).__init__()
         self.input_dim, self.hidden_dim, self.num_layers = input_dim, hidden_dim, num_layers
         self.layers = nn.ModuleList()
-        self.layers.append(RNNPytorch(input_dim, hidden_dim, input_dim))
+        self.layers.append(LSTMCell(input_dim, hidden_dim))
         for _ in range(num_layers - 1):
-            self.layers.append(RNNPytorch(hidden_dim, hidden_dim, output_dim=input_dim))
+            self.layers.append(LSTMCell(hidden_dim, hidden_dim))
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_dim, input_dim)
-
         nn.init.xavier_uniform_(self.linear.weight.data)
         self.linear.bias.data.fill_(0.0)
-        self.ln = nn.LayerNorm(hidden_dim)
-
 
     def forward(self, x, h):
         # x has shape [batch_size, seq_len, embed_dim]
         # h is a tuple containing h and c, each have shape [layer_num, batch_size, hidden_dim]
         hidden, cell = h
         output_hidden, output_cell = self.layers[0](x, hidden[0], cell[0])
-
-        new_hidden, new_cell = [output_hidden[:, -1].unsqueeze(0)], [output_cell.unsqueeze(0)]
+        new_hidden, new_cell = [output_hidden[:, -1].unsqueeze(0)], [output_cell[:, -1].unsqueeze(0)]
         for i in range(1, self.num_layers):
             output_hidden, output_cell = self.layers[i](self.dropout(output_hidden), hidden[i], cell[i])
-
             new_hidden.append(output_hidden[:, -1].unsqueeze(0))
-            new_cell.append(output_cell.unsqueeze(0))
-
-        return self.linear(self.dropout(self.ln(output_hidden))), (torch.cat(new_hidden, dim=0), torch.cat(new_cell, dim=0))
+            new_cell.append(output_cell[:, -1].unsqueeze(0))
+        return self.linear(self.dropout(output_hidden)), (torch.cat(new_hidden, dim=0), torch.cat(new_cell, dim=0))
 
 
 
 class SequenceDataset(Dataset):
-    def __init__(self, txt_path: str, seq_length: int = 100) -> None:
+    def __init__(self, txt_path: str, seq_length: int = 100):
         f = open(txt_path, encoding="utf-8")
         self.seq_length = seq_length
         self.corpus = "".join(f.readlines()).lower()
@@ -115,25 +104,24 @@ class SequenceDataset(Dataset):
     def __len__(self) -> int:
         return self.xvals.shape[0]
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int):
         return self.xvals[idx], self.yvals[idx]
 
 
 SEQ_LENGTH = 100
 HIDDEN_SIZE = 512
-NUM_LAYERS = 2
-
+NUM_LAYERS = 1
 DROPOUT = 0.5
 
 LR = 0.005
 BATCH_SIZE = 128
-EPOCHS = 100
+EPOCHS = 50
 
 dataset = SequenceDataset("../../data/compliments.txt", seq_length=SEQ_LENGTH)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+print(len(dataset.vocab))
 model = MultiLayerLSTM(len(dataset.vocab), HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
 opt = optim.Adam(model.parameters(), lr = LR)
-# opt = optim.Adagrad(model.parameters(), lr = LR)
 crit = nn.CrossEntropyLoss()
 
 
@@ -142,11 +130,15 @@ for e in range(1, EPOCHS + 1):
     loop.set_description(f"Epoch : [{e}/{EPOCHS}] | ")
     total_loss = 0
     total_len = 0
+
     for x, y in loop:
+        # print(x.shape, y.shape)
         opt.zero_grad()
         h = (torch.zeros((NUM_LAYERS, x.shape[0], HIDDEN_SIZE)), torch.zeros((NUM_LAYERS, x.shape[0], HIDDEN_SIZE)))
         yhat, h = model.forward(x, h)
-
+        # print(yhat[0][0])
+        # print(y[0][0])
+        # print("Testing", h[0].shape)
         loss = crit(yhat.view(-1, yhat.shape[-1]), y.view(-1, y.shape[-1]))
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 5)

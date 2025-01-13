@@ -1,22 +1,22 @@
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torch
-from utils import one_hot
-from utils import sample
+from model.utils import one_hot, sample
 from torch.utils.data import DataLoader
-
+import time
 from torch import nn, optim
 from tqdm import tqdm
 
-class LSTMCell(nn.Module):
+class RNNPytorch(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim):
-        super(LSTMCell, self).__init__()
-        self.input_dim, self.hidden_dim = input_dim, hidden_dim
-        self.forget_input, self.forget_hidden, self.forget_bias = self.create_gate_parameters()
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(RNNPytorch, self).__init__()
+        self.input_dim, self.hidden_dim,self.output_dim = input_dim, hidden_dim,output_dim
         self.input_input, self.input_hidden, self.input_bias = self.create_gate_parameters()
-        self.output_input, self.output_hidden, self.output_bias = self.create_gate_parameters()
-        self.cell_input, self.cell_hidden, self.cell_bias = self.create_gate_parameters()
+        self.hidden_output = nn.Parameter(torch.zeros(self.hidden_dim, self.output_dim))
+        self.bias_output = nn.Parameter(torch.zeros(self.output_dim))
+        nn.init.xavier_uniform_(self.hidden_output)
+
 
     def create_gate_parameters(self):
         input_weights = nn.Parameter(torch.zeros(self.input_dim, self.hidden_dim))
@@ -26,28 +26,19 @@ class LSTMCell(nn.Module):
         bias = nn.Parameter(torch.zeros(self.hidden_dim))
         return input_weights, hidden_weights, bias
 
+
     def forward(self, x, h, c):
-        # x has shape [batch_size, seq_len, input_size]
-        output_hiddens, output_cells = [], []
+        output_hiddens, output_cells = [], [] #Return the hidden state and the output
+
         for i in range(x.shape[1]):
-            # print("x", x[:, i].shape)
-            forget_gate = F.sigmoid((x[:, i] @ self.forget_input) + (h @ self.forget_hidden) + self.forget_bias)
-            input_gate = F.sigmoid((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
-            output_gate = F.sigmoid((x[:, i] @ self.output_input) + (h @ self.output_hidden) + self.output_bias)
-            input_activations = F.tanh((x[:, i] @ self.cell_input) + (h @ self.cell_hidden) + self.cell_bias)
-            c = (forget_gate * c) + (input_gate * input_activations)
-            h = F.tanh(c) * output_gate
-
-            squeeze_h = h.unsqueeze(1)
-            output_hiddens.append(squeeze_h)
-
-
-            squeeze_c = c.unsqueeze(1)
-
-            output_cells.append(squeeze_c)
-            # print("output cells", len(output_cells))
-            # print("output cells", torch.concat(output_cells, dim=1).shape)
-        return torch.concat(output_hiddens, dim=1), torch.concat(output_cells, dim=1)
+            m = nn.LeakyReLU(0.1)
+            # h = F.tanh((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
+            h = m((x[:, i] @ self.input_input) + (h @ self.input_hidden) + self.input_bias)
+            output_hidden =  h@self.hidden_output  + self.bias_output
+            output_hiddens.append(h.unsqueeze(1)) #We need a 3 dimensional result
+            output_val = output_hidden.unsqueeze(1)
+            output_cells.append(output_val)
+        return torch.cat(output_hiddens, dim=1), torch.cat(output_cells, dim=1)
 
 
 
@@ -57,25 +48,31 @@ class MultiLayerLSTM(nn.Module):
         super(MultiLayerLSTM, self).__init__()
         self.input_dim, self.hidden_dim, self.num_layers = input_dim, hidden_dim, num_layers
         self.layers = nn.ModuleList()
-        self.layers.append(LSTMCell(input_dim, hidden_dim))
+        self.layers.append(RNNPytorch(input_dim, hidden_dim, input_dim))
         for _ in range(num_layers - 1):
-            self.layers.append(LSTMCell(hidden_dim, hidden_dim))
+            self.layers.append(RNNPytorch(hidden_dim, hidden_dim, output_dim=input_dim))
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_dim, input_dim)
+
         nn.init.xavier_uniform_(self.linear.weight.data)
         self.linear.bias.data.fill_(0.0)
+        self.ln = nn.LayerNorm(hidden_dim)
+
 
     def forward(self, x, h):
         # x has shape [batch_size, seq_len, embed_dim]
         # h is a tuple containing h and c, each have shape [layer_num, batch_size, hidden_dim]
         hidden, cell = h
         output_hidden, output_cell = self.layers[0](x, hidden[0], cell[0])
-        new_hidden, new_cell = [output_hidden[:, -1].unsqueeze(0)], [output_cell[:, -1].unsqueeze(0)]
+
+        new_hidden, new_cell = [output_hidden[:, -1].unsqueeze(0)], [output_cell.unsqueeze(0)]
         for i in range(1, self.num_layers):
             output_hidden, output_cell = self.layers[i](self.dropout(output_hidden), hidden[i], cell[i])
+
             new_hidden.append(output_hidden[:, -1].unsqueeze(0))
-            new_cell.append(output_cell[:, -1].unsqueeze(0))
-        return self.linear(self.dropout(output_hidden)), (torch.concat(new_hidden, dim=0), torch.concat(new_cell, dim=0))
+            new_cell.append(output_cell.unsqueeze(0))
+
+        return self.linear(self.dropout(self.ln(output_hidden))), (torch.cat(new_hidden, dim=0), torch.cat(new_cell, dim=0))
 
 
 
@@ -104,50 +101,49 @@ class SequenceDataset(Dataset):
     def __len__(self) -> int:
         return self.xvals.shape[0]
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int):
         return self.xvals[idx], self.yvals[idx]
 
 
 SEQ_LENGTH = 100
 HIDDEN_SIZE = 512
-NUM_LAYERS = 1
+NUM_LAYERS = 3
+
 DROPOUT = 0.5
 
-LR = 0.005
+LR = 0.00005
 BATCH_SIZE = 128
-EPOCHS = 2
+EPOCHS = 100
 
 dataset = SequenceDataset("../../data/compliments.txt", seq_length=SEQ_LENGTH)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
-print(len(dataset.vocab))
 model = MultiLayerLSTM(len(dataset.vocab), HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
 opt = optim.Adam(model.parameters(), lr = LR)
+# opt = optim.Adagrad(model.parameters(), lr = LR)
 crit = nn.CrossEntropyLoss()
 
 
 for e in range(1, EPOCHS + 1):
+    epoch_start = time.time()
     loop = tqdm(loader, total=len(loader), leave=True, position=0)
     loop.set_description(f"Epoch : [{e}/{EPOCHS}] | ")
     total_loss = 0
     total_len = 0
-
     for x, y in loop:
-        print(x.shape, y.shape)
+
         opt.zero_grad()
         h = (torch.zeros((NUM_LAYERS, x.shape[0], HIDDEN_SIZE)), torch.zeros((NUM_LAYERS, x.shape[0], HIDDEN_SIZE)))
         yhat, h = model.forward(x, h)
-        print(yhat[0][0])
-        print(y[0][0])
-        # print("Testing", h[0].shape)
+        # print(yhat.view(-1, yhat.shape[-1]).shape)
         loss = crit(yhat.view(-1, yhat.shape[-1]), y.view(-1, y.shape[-1]))
         loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), 5)
+        nn.utils.clip_grad_norm_(model.parameters(), 1)
         opt.step()
 
         total_loss += loss.item()
         total_len += 1
         loop.set_postfix(average_loss = total_loss / total_len)
-
+    epoch_end = time.time() - epoch_start
     if e % 2 == 0:
-        print(f"\n{'=' * 50}\nSample output: \n{sample(model, dataset, 'thou', HIDDEN_SIZE, 400, NUM_LAYERS, )}\n{'=' * 50}\n")
+        print(f"\n{'=' * 50}\nSample output: \n{sample(model, dataset, ' ', HIDDEN_SIZE, 400, NUM_LAYERS, )}\n{'=' * 50}\nEpoch Time: {epoch_end}")
         torch.save(model.state_dict(), "lstm-weights.pth")
