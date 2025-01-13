@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 def one_hot(c: int, vocab_size: int):
     encoded = torch.zeros(vocab_size)
@@ -23,7 +24,7 @@ def predict(model, char, hidden, dataset):
         next_char, new_hidden = next_char.view(-1), new_hidden
         probs = F.softmax(next_char, dim=0)
         char = torch.multinomial(probs, 1)[0].item()
-    return dataset.idx_to_vocab[char], new_hidden
+    return dataset.idx_to_vocab[char], new_hidden,probs[char]
 def sample(model, dataset, init_seq, hidden_size, seq_length, num_layers) -> str:
     with torch.no_grad():
         out = init_seq
@@ -33,12 +34,19 @@ def sample(model, dataset, init_seq, hidden_size, seq_length, num_layers) -> str
             x[i] = one_hot(dataset.vocab_to_idx[char], len(dataset.vocab))
         preds, h = model.forward(x.unsqueeze(0), h)
         out += dataset.idx_to_vocab[preds[0][-1].argmax().item()]
-
+        logVal =0
         for i in range(seq_length):
-            c, h = predict(model, out[-1], h, dataset)
+            c, h, prob = predict(model, out[-1], h, dataset)
+            logVal += torch.log(prob)
             out += c
-        return out
+        return out, logVal/seq_length
 
+def sigmoid( x):
+    return 1 / (1 + np.exp(-x))
+
+def softmax( x):
+    e_x = np.exp(x - np.max(x))  # max(x) subtracted for numerical stability
+    return e_x / np.sum(e_x)
 
 
 

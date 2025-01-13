@@ -26,11 +26,8 @@ class AttentionHead(nn.Module):
         block_size, batch_size, embed_size = x.shape
         k = self.key(x)
         q = self.query(x)# (B,T,C)
-
-        weights = q @ k.transpose(-2, -1) * embed_size**-0.5# (B, T, C) @ (B, C, T) -> (B, T, T)
-        # print(weights.shape)
-        # weights  = weights/math.sqrt(embed_size)
-        #TODO: What is maskedFill
+        weights = q @ k.transpose(-2, -1) # (B, T, C) @ (B, C, T) -> (B, T, T)
+        weights  = weights/math.sqrt(embed_size)
         weights = weights.masked_fill(self.tril[:batch_size, :batch_size] == 0, float('-inf'))  # (B, T, T)
         weights = F.softmax(weights, dim=-1)
         weights = self.dropout(weights)
